@@ -1,135 +1,105 @@
 section .data
-    ; Matrizes A e B (2x2)
-    A dd 1, 2
-      dd 3, 4
+    matA:   dd 1, 2, 3, 4         
+    matB:   dd 5, 6, 7, 8         
+    res:    dd 0, 0, 0, 0         
 
-    B dd 5, 6
-      dd 7, 8
+    texto_inicio: db "Resultado da soma:", 10
+    tam_texto_inicio: equ $ - texto_inicio
 
-    ; Mensagem de cabeçalho
-    msg db "Resultado da soma das matrizes:", 0xA, 0
-    msg_len equ $ - msg
+    espaco: db " ", 0
+    nova_linha: db 10
 
-section .bss
-    ; Matriz Resultante R
-    R resd 4
-
-    ; Buffer para conversão de número em string (máx 10 dígitos + newline + null)
-    num_str resb 12
+    buffer: times 12 db 0    
 
 section .text
     global _start
 
 _start:
-    ; -------------------
-    ; Soma as matrizes
-    ; -------------------
-    mov esi, A
-    mov edi, B
-    mov ebx, R
-    mov ecx, 4
+    mov esi, 0
 
 soma_loop:
-    mov eax, [esi]
-    add eax, [edi]
-    mov [ebx], eax
+    mov eax, [matA + esi*4]
+    add eax, [matB + esi*4]
+    mov [res + esi*4], eax
+    inc esi
+    cmp esi, 4
+    jl soma_loop
 
-    add esi, 4
-    add edi, 4
-    add ebx, 4
-
-    loop soma_loop
-
-    ; -------------------
-    ; Escreve cabeçalho
-    ; -------------------
-    mov eax, 4
-    mov ebx, 1
-    mov ecx, msg
-    mov edx, msg_len
+    mov eax, 4          
+    mov ebx, 1         
+    mov ecx, texto_inicio
+    mov edx, tam_texto_inicio
     int 0x80
 
-    ; -------------------
-    ; Escreve os 4 valores da matriz R
-    ; -------------------
-    mov esi, R        ; ponteiro para matriz R
-    mov ecx, 4        ; número de elementos
+    xor esi, esi    
 
 print_loop:
-    mov eax, [esi]    ; carrega valor
-    call int_to_str   ; converte para string em num_str
+    mov eax, [res + esi*4]
+    push esi
+    call int_to_ascii
+    pop esi
 
-    ; syscall write para mostrar string
+    mov edx, eax 
     mov eax, 4
     mov ebx, 1
-    mov ecx, num_str
-    mov edx, eax      ; tamanho da string foi retornado em EAX pela função
+    mov ecx, buffer
     int 0x80
 
-    add esi, 4
-    loop print_loop
+    cmp esi, 1
+    je print_newline
+    cmp esi, 3
+    je print_newline
 
-    ; fim do programa - exit(0)
-    mov eax, 1
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, espaco
+    mov edx, 1
+    int 0x80
+    jmp continuar
+
+print_newline:
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, nova_linha
+    mov edx, 1
+    int 0x80
+
+continuar:
+    inc esi
+    cmp esi, 4
+    jl print_loop
+
+    mov eax, 1   
     xor ebx, ebx
     int 0x80
 
-; -------------------------------
-; Função: int_to_str
-; Entrada: EAX = número inteiro
-; Saída: converte número para string em num_str
-; Retorna em EAX o comprimento da string (com \n)
-; -------------------------------
-int_to_str:
-    push eax
-    push ebx
-    push ecx
-    push edx
+int_to_ascii:
+    mov ecx, 10
+    mov edi, buffer + 11 
+    mov byte [edi], 0
 
-    mov ecx, 10         ; base decimal
-    mov edi, num_str+10 ; final do buffer
-    mov byte [edi], 0xA ; newline
-
-    dec edi
-
-    cmp eax, 0
-    jnz .convert
-
-    mov byte [edi], '0'
-    dec edi
-    jmp .done
+    mov ebx, 0          
 
 .convert:
     xor edx, edx
-
-.next_digit:
     div ecx
     add dl, '0'
-    mov [edi], dl
     dec edi
-    xor edx, edx
-    cmp eax, 0
-    jne .next_digit
+    mov [edi], dl
+    inc ebx
+    test eax, eax
+    jnz .convert
 
-.done:
-    inc edi
     mov esi, edi
-    mov ecx, num_str
+    mov edi, buffer
+    mov ecx, ebx
 
-.copy_loop:
+.copy:
     mov al, [esi]
-    mov [ecx], al
+    mov [edi], al
     inc esi
-    inc ecx
-    cmp al, 0xA
-    jne .copy_loop
+    inc edi
+    loop .copy
 
-    mov eax, ecx
-    sub eax, num_str    ; retorna comprimento da string em EAX
-
-    pop edx
-    pop ecx
-    pop ebx
-    pop eax
+    mov eax, ebx  
     ret
-; Fim do programa
